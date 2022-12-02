@@ -59,7 +59,7 @@ const float BOXSIZE = 2.f;
 // multiplication factors for input interaction:
 //  (these are known from previous experience)
 
-const float ANGFACT = 1.f;
+const float ANGFACT = 0.5f;
 const float SCLFACT = 0.005f;
 
 // minimum allowable scale factor:
@@ -218,8 +218,11 @@ void	Reset( );
 void	Resize( int, int );
 void	Visibility( int );
 void    OsuSphere(float, int, int);
+void    updateEye( );
 
 void			Axes( float );
+
+float planetr = 10;
 
 unsigned char *	BmpToTexture( char *, int *, int * );
 int				ReadInt( FILE * );
@@ -231,7 +234,17 @@ void			Cross(float[3], float[3], float[3]);
 float			Dot(float [3], float [3]);
 float			Unit(float [3], float [3]);
 
+struct {
+	float lat;
+	float lon;
+	float r;
+	float x;
+	float y;
+	float z;
+	
+} eye;
 
+float cameraZ;
 // main program:
 
 int
@@ -356,23 +369,58 @@ Display( )
 	glMatrixMode( GL_MODELVIEW );
 	glLoadIdentity( );
 
+	// possibly draw the axes:
+
+	
+
 
 	// set the eye position, look-at position, and up-vector:
 
-	gluLookAt( 0.f, 0.f, 10.f,     0.f, 0.f, 0.f,     0.f, 1.f, 0.f );
+
+	/*  TODO: Instead of scaling the scene with glScale to 'zoom in',
+	/*	I should just move the camera closer to 0,0, since we are translating there anyway for the whole scene.
+		All I gotta do is change the eye's z position to get the zooming effect.
+
+		parameters(Scale)
+		out: Z value
+			 Z value should be 1/scale  so as scale goes up, Zvalue gets smaller, appreaching zero, but never getting there, 
+			 and the reverse when Scale goes down
+
+			Note: Scale goes up on 'zoom in'   action
+			  Scale goes down on 'zoom out'
+			  We want z to go down on zoom in action, 
+
+	*/
 
 
+
+	// r = currentPLanet.r
+	// float eye.r = math.pow((1 / Scale),2) * 10 + r
+
+	updateEye();
+
+	gluLookAt( eye.x, eye.y, eye.z,  0.f, 0.f, 0.f,  0.f, 1.f, 0.f );
+
+
+	if( AxesOn != 0 )
+	{
+		glColor3fv( &Colors[WhichColor][0] );
+		glCallList( AxesList );
+	}
+
+	// if( Scale < MINSCALE )
+	// 	Scale = MINSCALE;
+	// glScalef( (GLfloat)Scale, (GLfloat)Scale, (GLfloat)Scale );
 	// rotate the scene:
 
-	glRotatef( (GLfloat)Yrot, 0.f, 1.f, 0.f );
-	glRotatef( (GLfloat)Xrot, 1.f, 0.f, 0.f );
+	// glRotatef( (GLfloat)Yrot, 0.f, 1.f, 0.f );
+	// glRotatef( (GLfloat)Xrot, 1.f, 0.f, 0.f );      // Actually rotates Z.. quick fix to make the camera more natural
 
 
-	// uniformly scale the scene:
 
-	if( Scale < MINSCALE )
-		Scale = MINSCALE;
-	glScalef( (GLfloat)Scale, (GLfloat)Scale, (GLfloat)Scale );
+	// float x,y,z = currentPlanet.position;
+	// 
+	
 
 
 	// set the fog parameters:
@@ -392,13 +440,7 @@ Display( )
 	}
 
 
-	// possibly draw the axes:
-
-	if( AxesOn != 0 )
-	{
-		glColor3fv( &Colors[WhichColor][0] );
-		glCallList( AxesList );
-	}
+	
 
 
 	// since we are using glScalef( ), be sure the normals get unitized:
@@ -413,11 +455,18 @@ Display( )
 		glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
 	}
 	glShadeModel( GL_SMOOTH );
-	OsuSphere(43.2690,100,100);
+	OsuSphere(.432690,100,100);
+
+	// glPushMatrix();
+	// 	glTranslatef(2,0,0);
+	// 	OsuSphere(.432690,50,50);
+	// glPopMatrix();
 
 	if(TextureOn){
 		glDisable( GL_TEXTURE_2D );
 	}
+
+	
 
 #ifdef DEMO_Z_FIGHTING
 	if( DepthFightingOn != 0 )
@@ -467,6 +516,24 @@ Display( )
 	// note: be sure to use glFlush( ) here, not glFinish( ) !
 
 	glFlush( );
+}
+
+void
+updateEye(){
+	eye.lat = Xrot * (M_PI/180);
+	eye.lon = Yrot * (M_PI/180);
+	eye.r = pow((1 / Scale),2) * 10 + .5;
+
+	// Xrot = ϕlat
+	// Yrot = θlong
+	// float lat = RadtoDeg(Xrot) 
+	// x,y,z = (cosϕ×sinθ,cosϕ×cosθ,sinϕ)
+
+	eye.x = cos(eye.lat) * sin(eye.lon) * eye.r;
+	eye.z = cos(eye.lat) * cos(eye.lon) * eye.r;
+	eye.y = sin(eye.lat) * eye.r;
+	
+	
 }
 
 
@@ -785,6 +852,9 @@ InitGraphics( )
 
 	glutIdleFunc( Animate );
 
+	Xrot = Yrot = 0;
+	
+
 	// init the glew package (a window must be open to do this):
 
 #ifdef WIN32
@@ -904,13 +974,17 @@ MouseButton( int button, int state, int x, int y )
 
 		case SCROLL_WHEEL_UP:
 			Scale += SCLFACT * SCROLL_WHEEL_CLICK_FACTOR;
+			printf("Scale: %f\nCameraZ: %f\n", Scale, cameraZ);
+			
 			// keep object from turning inside-out or disappearing:
 			if (Scale < MINSCALE)
 				Scale = MINSCALE;
 			break;
 
 		case SCROLL_WHEEL_DOWN:
+
 			Scale -= SCLFACT * SCROLL_WHEEL_CLICK_FACTOR;
+			printf("Scale: %f\nCameraZ: %f\n", Scale, cameraZ);
 			// keep object from turning inside-out or disappearing:
 			if (Scale < MINSCALE)
 				Scale = MINSCALE;
@@ -945,13 +1019,19 @@ MouseButton( int button, int state, int x, int y )
 void
 MouseMotion( int x, int y )
 {
-	int dx = x - Xmouse;		// change in mouse coords
+	int dx = -x + Xmouse;		// change in mouse coords
 	int dy = y - Ymouse;
 
 	if( ( ActiveButton & LEFT ) != 0 )
 	{
-		Xrot += ( ANGFACT*dy );
+		float iXrot = Xrot + (ANGFACT*dy);
+		if (iXrot < 89.98 && iXrot > -89.98){
+			Xrot += ( ANGFACT*dy );
+		}
+		
 		Yrot += ( ANGFACT*dx );
+		updateEye();
+		printf("Xrot: %f\tYrot: %f\n", Xrot, Yrot);
 	}
 
 	if( ( ActiveButton & MIDDLE ) != 0 )
@@ -992,6 +1072,7 @@ Reset( )
 	Xrot = Yrot = 0.;
 	TextureOn = 1;
 	AnimationOn = 0;
+	
 
 }
 
