@@ -193,6 +193,10 @@ int     AnimationOn;
 #define MS_IN_THE_ANIMATION_CYCLE	20000
 
 
+unsigned char *MercuryTexel, *VenusTexel, *EarthTexel, *MarsTexel, *JupiterTexel, *SaturnTexel, *UranusTexel, *NeptuneTexel;	// the texels
+unsigned int    MercuryTex, VenusTex, EarthTex, MarsTex, JupiterTex, SaturnTex, UranusTex, NeptuneTex;	// the texture object
+
+
 // function prototypes:
 
 void	Animate( );
@@ -234,6 +238,10 @@ void			Cross(float[3], float[3], float[3]);
 float			Dot(float [3], float [3]);
 float			Unit(float [3], float [3]);
 
+int frame;
+int timeScale = 3.1e6;
+
+
 struct {
 	float lat;
 	float lon;
@@ -244,8 +252,73 @@ struct {
 	
 } eye;
 
+
+
 float cameraZ;
 // main program:
+
+class Planet{
+	public:
+		const double G = 6.6743e-11;
+		const double SunMass = 1.9891e30; 
+
+		float x, z, angle;
+
+		float r, orbitR, orbitPeriod; // Time in days, distance in 10 Million Mile units
+		unsigned int *texture;
+
+		Planet(){}
+
+		Planet(float r, float orbitR, float orbitPeriod, unsigned int *texture){
+			this->r = r;
+			this->orbitR = orbitR;
+			this->orbitPeriod = orbitPeriod;
+			this->texture = texture;
+
+			this->angle = 0;
+		}
+
+		// Returns orbital period in seconds
+		float
+		getOrbitPeriod(float orbitR){
+			double orbitFactor = 4 * pow(M_PI,2) / (G * SunMass);
+			printf("%f\n", G * SunMass);
+
+			return sqrt(orbitFactor * pow(orbitR, 3));
+		}
+
+		void
+		draw(){
+			glEnable( GL_TEXTURE_2D );
+			glBindTexture(GL_TEXTURE_2D, *texture);
+			glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+			glColor3f(0,0,0);
+			glShadeModel( GL_SMOOTH );
+			glPushMatrix();
+				glTranslatef(x, 0, z);
+				OsuSphere(r,100,100);
+			glPopMatrix();
+		}
+
+		void
+		update(){
+			// 1 year = 10 seconds
+			// 31,540,000 seconds per year
+			// Good time scale = 3.1 million times faster (divide peeriod by time scale)
+			// 1 frame = 30 seconds
+
+			
+			angle += (2 * M_PI) / orbitPeriod; 
+			
+			x = cos(angle) * orbitR;
+			z = sin(angle) * orbitR;
+			// printf("EarthX: %f\tEarthZ: %f\n", x,z);
+		}
+
+};
+
+Planet Mars = Planet(1, 10, 600, &MarsTex);
+Planet Earth = Planet(.5, 3, 365, &EarthTex);
 
 int
 main( int argc, char *argv[ ] )
@@ -301,13 +374,7 @@ Animate( )
 
 	// force a call to Display( ) next time it is convenient:
 	if(AnimationOn){
-		int ms = glutGet( GLUT_ELAPSED_TIME );	// milliseconds
-		ms  %=  MS_IN_THE_ANIMATION_CYCLE;
-		Time = (float)ms  /  (float)MS_IN_THE_ANIMATION_CYCLE;        // [ 0., 1. )
-
-		distortion = sin(Time * M_PI * 2);
-	}else{
-		distortion = 1;
+		frame++;
 	}
 	glutSetWindow( MainWindow );
 	glutPostRedisplay( );
@@ -369,7 +436,7 @@ Display( )
 	glMatrixMode( GL_MODELVIEW );
 	glLoadIdentity( );
 
-	// possibly draw the axes:
+	
 
 	
 
@@ -397,11 +464,13 @@ Display( )
 	// r = currentPLanet.r
 	// float eye.r = math.pow((1 / Scale),2) * 10 + r
 
+	Earth.update();
+	Mars.update();
 	updateEye();
 
 	gluLookAt( eye.x, eye.y, eye.z,  0.f, 0.f, 0.f,  0.f, 1.f, 0.f );
 
-
+	// possibly draw the axes:
 	if( AxesOn != 0 )
 	{
 		glColor3fv( &Colors[WhichColor][0] );
@@ -418,10 +487,10 @@ Display( )
 
 
 
-	// float x,y,z = currentPlanet.position;
+	// float x,y,z = -currentPlanet.position;
 	// 
 	
-
+	glTranslatef(0,0,0);
 
 	// set the fog parameters:
 
@@ -457,10 +526,9 @@ Display( )
 	glShadeModel( GL_SMOOTH );
 	OsuSphere(.432690,100,100);
 
-	// glPushMatrix();
-	// 	glTranslatef(2,0,0);
-	// 	OsuSphere(.432690,50,50);
-	// glPopMatrix();
+	
+	Earth.draw();
+	Mars.draw();
 
 	if(TextureOn){
 		glDisable( GL_TEXTURE_2D );
@@ -884,6 +952,31 @@ InitGraphics( )
 	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexImage2D( GL_TEXTURE_2D, 0, 3, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, Texture );
 
+	MarsTexel = BmpToTexture((char*)"textures/2k_mars.bmp", &width, &height);
+	glPixelStorei( GL_UNPACK_ALIGNMENT, 1 );
+	glGenTextures( 1, &MarsTex );
+	glBindTexture( GL_TEXTURE_2D, MarsTex );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexImage2D( GL_TEXTURE_2D, 0, 3, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, MarsTexel );
+
+
+	EarthTexel = BmpToTexture((char*)"textures/2k_earth_daymap.bmp", &width, &height);
+	glPixelStorei( GL_UNPACK_ALIGNMENT, 1 );
+	glGenTextures( 1, &EarthTex );
+	glBindTexture( GL_TEXTURE_2D, EarthTex );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexImage2D( GL_TEXTURE_2D, 0, 3, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, EarthTexel );
+
+
+	
+	
+
 }
 
 
@@ -1252,7 +1345,7 @@ OsuSphere( float radius, int slices, int stacks )
                 p->s = ( lng + M_PI    ) / ( 2.*M_PI );
                 p->t = ( lat + M_PI/2. ) / M_PI;
             }else{
-                p->s = (( lng + M_PI    ) / ( 2.*M_PI )) * distortion;
+                p->s = (( lng + M_PI    ) / ( 2.*M_PI ));
                 p->t = ( lat + M_PI/2. ) / M_PI;
             }
 		}
